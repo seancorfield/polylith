@@ -8,6 +8,15 @@
 ;; (:require ,,,) handling
 
 ;; Borrowed from `clojure.core`, where it's a private fn.
+(defn libspec-loaded?
+  "Returns true if x is a libspec (and not :as-alias)."
+  [x]
+  (or (symbol? x)
+      (and (vector? x)
+           (or
+            (nil? (second x))
+            (and (keyword? (second x))
+                 (not= :as-alias (second x)))))))
 (defn libspec?
   "Returns true if x is a libspec."
   [x]
@@ -58,7 +67,7 @@
     (= :require statement-type)
     (flatten
       (concat (map (comp str libspec->lib)
-                   (filter libspec? statement-body))
+                   (filter libspec-loaded? statement-body))
               (map prefix-list->lib-strs
                    (filter sequential?
                            (remove libspec?
