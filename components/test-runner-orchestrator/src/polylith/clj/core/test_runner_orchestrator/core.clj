@@ -183,7 +183,7 @@
           (transduce
             (comp (map #(test-opts workspace settings changes % is-verbose color-mode))
                   (map run-tests-for-project))
-            (completing (fn [_ x] (cond-> x (not x) (reduced))))
+            (completing (fn [_ x] (System/gc) (cond-> x (not x) (reduced))))
             true
             projects-to-test)))
       (print-execution-time start-time)
