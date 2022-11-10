@@ -87,6 +87,10 @@
 
       (run-tests [this {:keys [all-paths setup-fn teardown-fn process-ns color-mode] :as opts}]
                  (when (test-runner-contract/tests-present? this opts)
+                   (when (System/getenv "POLY_SHOW_CLASSPATH")
+                     (println "\n\nExternal test runner classpath:")
+                     (run! println all-paths)
+                     (println "===============================\n\n"))
                    (let [run-message (run-message name components bases @bricks-to-test*
                                                   @projects-to-test* color-mode)
                          _         (println run-message)
