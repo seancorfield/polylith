@@ -111,8 +111,7 @@
               create-test-runner)]
     (when (seq test-runners-seeing-test-sources)
       (let [lib-paths (resolve-deps project settings is-verbose color-mode)
-            ;; dangerous! should maintain path order here!
-            all-paths (into #{} cat [(:src paths) (:test paths) lib-paths])
+            all-paths (into [] cat [(:src paths) (:test paths) lib-paths])
             class-loader-delay (delay (common/create-class-loader all-paths color-mode))]
         (when is-verbose (println (str "# paths:\n" all-paths "\n")))
         (doseq [current-test-runner test-runners-seeing-test-sources]
