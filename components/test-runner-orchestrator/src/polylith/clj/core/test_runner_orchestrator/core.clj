@@ -58,20 +58,22 @@
             (throw e))))))
 
 (defn run-tests-for-project-with-test-runner
-  [{:keys [test-runner setup-exec-fn teardown-exec-fn color-mode runner-opts project]}]
+  [{:keys [test-runner color-mode runner-opts project
+           ;; these are only present for in-process test runners:
+           setup-exec-fn teardown-exec-fn]}]
   (let [for-project-using-runner
         (str "for the " (color/project (:name project) color-mode)
              " project using test runner: "
              (test-runner-contract/test-runner-name test-runner))]
     (if-not (test-runner-contract/tests-present? test-runner runner-opts)
       (println (str "No tests to run " for-project-using-runner "."))
-      (if (setup-exec-fn)
+      (if (or (nil? setup-exec-fn) (setup-exec-fn))
         (try
           (println (str "Running tests " for-project-using-runner "..."))
           (test-runner-contract/run-tests test-runner runner-opts)
           (catch Throwable e (throw e))
           (finally
-            (when-not (teardown-exec-fn)
+            (when-not (or (nil? teardown-exec-fn) (teardown-exec-fn))
               (throw (ex-info "Test terminated due to teardown failure"
                               {:project project})))))
         (throw (ex-info (str "Test terminated due to setup failure") {:project project}))))))
@@ -113,19 +115,27 @@
               create-test-runner)]
     (when (seq test-runners-seeing-test-sources)
       (let [lib-paths (resolve-deps project settings is-verbose color-mode)
+            ;; dangerous! should maintain path order here!
             all-paths (into #{} cat [(:src paths) (:test paths) lib-paths])
-            class-loader-delay (delay (common/create-class-loader all-paths color-mode))
-            runner-opts (merge opts
-                               {:class-loader-delay class-loader-delay
-                                :eval-in-project (->eval-in-project class-loader-delay)})]
+            class-loader-delay (delay (common/create-class-loader all-paths color-mode))]
         (when is-verbose (println (str "# paths:\n" all-paths "\n")))
         (doseq [current-test-runner test-runners-seeing-test-sources]
-          (->> {:test-runner current-test-runner
-                :setup-exec-fn #(execute-fn setup-fn "setup" name class-loader-delay color-mode)
-                :teardown-exec-fn #(execute-fn teardown-fn "teardown" name class-loader-delay color-mode)
-                :runner-opts runner-opts}
-               (merge opts)
-               (run-tests-for-project-with-test-runner)))
+          (let [process-ns (when (test-runner-contract/is-external-test-runner? current-test-runner)
+                             (test-runner-contract/external-process-namespace current-test-runner))
+                runner-opts (if process-ns
+                              {:process-ns process-ns
+                               :setup-fn setup-fn
+                               :teardown-fn teardown-fn}
+                              {:class-loader-delay class-loader-delay
+                               :eval-in-project (->eval-in-project class-loader-delay)})]
+            (->> (if process-ns
+                   {}
+                   {:setup-exec-fn #(execute-fn setup-fn "setup" name class-loader-delay color-mode)
+                    :teardown-exec-fn #(execute-fn teardown-fn "teardown" name class-loader-delay color-mode)})
+                 (merge {:test-runner current-test-runner
+                         :runner-opts (merge opts runner-opts)})
+                 (merge opts)
+                 (run-tests-for-project-with-test-runner))))
         true))))
 
 (defn affected-by-changes? [{:keys [name]} {:keys [project-to-bricks-to-test project-to-projects-to-test]}]
