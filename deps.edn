@@ -8,6 +8,7 @@
                                 "components/creator/src"
                                 "components/creator/resources"
                                 "components/deps/src"
+                                "components/external-test-runner/src"
                                 "components/file/src"
                                 "components/git/src"
                                 "components/help/src"
@@ -31,7 +32,8 @@
                                 "components/workspace-clj/src"
                                 "components/ws-explorer/src"
                                 "components/ws-file/src"
-                                "bases/poly-cli/src"]
+                                "bases/poly-cli/src"
+                                "bases/external-test-runner-cli/src"]
 
                   :extra-deps {org.clojure/clojure {:mvn/version "1.11.1"}
                                org.clojure/tools.deps.alpha {:mvn/version "0.14.1205"}

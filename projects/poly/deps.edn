@@ -4,6 +4,7 @@
         poly/common                   {:local/root "../../components/common"}
         poly/creator                  {:local/root "../../components/creator"}
         poly/deps                     {:local/root "../../components/deps"}
+        poly/external-test-runner     {:local/root "../../components/external-test-runner"}
         poly/file                     {:local/root "../../components/file"}
         poly/git                      {:local/root "../../components/git"}
         poly/help                     {:local/root "../../components/help"}
@@ -25,6 +26,8 @@
         poly/workspace-clj            {:local/root "../../components/workspace-clj"}
         poly/ws-explorer              {:local/root "../../components/ws-explorer"}
         poly/ws-file                  {:local/root "../../components/ws-file"}
+        ;; this base is so the external-test-runner component can find it:
+        poly/external-test-runner-cli {:local/root "../../bases/external-test-runner-cli"}
         poly/poly-cli                 {:local/root "../../bases/poly-cli"}
 
         org.clojure/clojure {:mvn/version "1.11.1"}

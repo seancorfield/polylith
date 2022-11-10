@@ -10,8 +10,7 @@
    [polylith.clj.core.test-runner-contract.interface.verifiers :as test-runner-verifiers]
    [polylith.clj.core.util.interface.color :as color]
    [polylith.clj.core.util.interface.time :as time-util]
-   [polylith.clj.core.validator.interface :as validator]
-   [clojure.edn :as edn]))
+   [polylith.clj.core.validator.interface :as validator]))
 
 (defn resolve-deps [{:keys [name] :as project} settings is-verbose color-mode]
   (try
@@ -35,9 +34,7 @@
           (do
             (println (color/error color-mode (str "Could not find " fn-type " function: " function)))
             false)
-          (do
-            (println "Evaluated" fn-type "for" project-name)
-            true))
+          true)
         (catch Throwable t
           (let [message (str (or (some-> t .getCause) (.getMessage t)))]
             (println (color/error color-mode (str "\nTest " fn-type " failed: " message)))
@@ -71,7 +68,6 @@
         (try
           (println (str "Running tests " for-project-using-runner "..."))
           (test-runner-contract/run-tests test-runner runner-opts)
-          (catch Throwable e (throw e))
           (finally
             (when-not (or (nil? teardown-exec-fn) (teardown-exec-fn))
               (throw (ex-info "Test terminated due to teardown failure"
@@ -125,7 +121,8 @@
                 runner-opts (if process-ns
                               {:process-ns process-ns
                                :setup-fn setup-fn
-                               :teardown-fn teardown-fn}
+                               :teardown-fn teardown-fn
+                               :all-paths all-paths}
                               {:class-loader-delay class-loader-delay
                                :eval-in-project (->eval-in-project class-loader-delay)})]
             (->> (if process-ns
