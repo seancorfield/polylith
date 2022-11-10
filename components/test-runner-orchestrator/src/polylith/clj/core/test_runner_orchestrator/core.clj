@@ -10,7 +10,8 @@
    [polylith.clj.core.test-runner-contract.interface.verifiers :as test-runner-verifiers]
    [polylith.clj.core.util.interface.color :as color]
    [polylith.clj.core.util.interface.time :as time-util]
-   [polylith.clj.core.validator.interface :as validator]))
+   [polylith.clj.core.validator.interface :as validator]
+   [clojure.edn :as edn]))
 
 (defn resolve-deps [{:keys [name] :as project} settings is-verbose color-mode]
   (try
@@ -20,14 +21,14 @@
       (println (str "Couldn't resolve libraries for the " (color/project name color-mode) " project: " e))
       (throw e))))
 
-(defn execute-fn [function fn-type project-name class-loader color-mode]
+(defn execute-fn [function fn-type project-name class-loader-delay color-mode]
   (if function
     (do
       (println (str "Running test " fn-type " for the " (color/project project-name color-mode)
                     " project: " function))
       (try
         (if (= :missing-fn
-               (common/eval-in class-loader
+               (common/eval-in (deref class-loader-delay)
                                `(if-let [~'fun (clojure.core/requiring-resolve '~function)]
                                   (~'fun '~project-name)
                                   :missing-fn)))
@@ -35,7 +36,7 @@
             (println (color/error color-mode (str "Could not find " fn-type " function: " function)))
             false)
           (do
-            (println)
+            (println "Evaluated" fn-type "for" project-name)
             true))
         (catch Throwable t
           (let [message (str (or (some-> t .getCause) (.getMessage t)))]
@@ -57,26 +58,30 @@
             (throw e))))))
 
 (defn run-tests-for-project-with-test-runner
-  [{:keys [test-runner setup-delay teardown-delay color-mode runner-opts project]}]
+  [{:keys [test-runner setup-exec-fn teardown-exec-fn color-mode runner-opts project]}]
   (let [for-project-using-runner
         (str "for the " (color/project (:name project) color-mode)
              " project using test runner: "
              (test-runner-contract/test-runner-name test-runner))]
     (if-not (test-runner-contract/tests-present? test-runner runner-opts)
       (println (str "No tests to run " for-project-using-runner "."))
-      (if (deref setup-delay)
+      (if (setup-exec-fn)
         (try
           (println (str "Running tests " for-project-using-runner "..."))
           (test-runner-contract/run-tests test-runner runner-opts)
-          (catch Throwable e (deref teardown-delay) (throw e)))
+          (catch Throwable e (throw e))
+          (finally
+            (when-not (teardown-exec-fn)
+              (throw (ex-info "Test terminated due to teardown failure"
+                              {:project project})))))
         (throw (ex-info (str "Test terminated due to setup failure") {:project project}))))))
 
 (defn ex-causes [ex]
   (str/join "; " (take-while some? (iterate ex-cause ex))))
 
-(defn ->eval-in-project [class-loader]
+(defn ->eval-in-project [class-loader-delay]
   (fn [form]
-    (try (common/eval-in class-loader form)
+    (try (common/eval-in (deref class-loader-delay) form)
          (catch Throwable e
            (throw (ex-info
                    (str "Error while evaluating form " form
@@ -109,25 +114,19 @@
     (when (seq test-runners-seeing-test-sources)
       (let [lib-paths (resolve-deps project settings is-verbose color-mode)
             all-paths (into #{} cat [(:src paths) (:test paths) lib-paths])
-            class-loader (common/create-class-loader all-paths color-mode)
-            setup!* (delay (execute-fn setup-fn "setup" name class-loader color-mode))
-            setup-failed? #(and (realized? setup!*) (not (deref setup!*)))
-            setup-succeeded? #(and (realized? setup!*) (deref setup!*))
-            teardown!* (delay (execute-fn teardown-fn "teardown" name class-loader color-mode))
+            class-loader-delay (delay (common/create-class-loader all-paths color-mode))
             runner-opts (merge opts
-                               {:class-loader class-loader
-                                :eval-in-project (->eval-in-project class-loader)})]
+                               {:class-loader-delay class-loader-delay
+                                :eval-in-project (->eval-in-project class-loader-delay)})]
         (when is-verbose (println (str "# paths:\n" all-paths "\n")))
         (doseq [current-test-runner test-runners-seeing-test-sources]
-          (when-not (setup-failed?)
-            (->> {:test-runner current-test-runner
-                  :setup-delay setup!*
-                  :teardown-delay teardown!*
-                  :runner-opts runner-opts}
-                 (merge opts)
-                 (run-tests-for-project-with-test-runner))))
-        (when (setup-succeeded?)
-          (deref teardown!*))))))
+          (->> {:test-runner current-test-runner
+                :setup-exec-fn #(execute-fn setup-fn "setup" name class-loader-delay color-mode)
+                :teardown-exec-fn #(execute-fn teardown-fn "teardown" name class-loader-delay color-mode)
+                :runner-opts runner-opts}
+               (merge opts)
+               (run-tests-for-project-with-test-runner)))
+        true))))
 
 (defn affected-by-changes? [{:keys [name]} {:keys [project-to-bricks-to-test project-to-projects-to-test]}]
   (seq (concat (project-to-bricks-to-test name)
